@@ -46,6 +46,7 @@ endif()
 set(TMP_TEST_SRC
 	tests/tests.cpp
 	tests/test_callable.cpp
+	tests/test_type_list.cpp
 )
 
 # Other files one would want to edit that are not directly part of the TMP build but we want to appear in projects

@@ -34,3 +34,34 @@ SCENARIO("Getting callable info", "[callable]") {
 		std::is_same_v<TMP::Type_list<int, double>::template concatenate<TMP::Type_list<int *, double *>>, TMP::Type_list<int, double, int *, double *>>);
 	static_assert(std::is_same_v<typename TMP::Type_list<int, int *, double>::remove<int *>, TMP::Type_list<int, double>>);
 }
+
+SCENARIO("Testing Function_ref", "[Function_ref]") {
+	WHEN("Checking Overload") {
+		{ TMP::Overload{}; }
+		{
+			TMP::Overload f{[](int) { return 1; }, [](double) { return 2; }};
+			REQUIRE(f(42) == 1);
+			REQUIRE(f(3.14) == 2);
+		}
+	}
+	WHEN("Creating Function_ref from function pointer") {
+		{
+			TMP::Function_ref fr{+[](int i) { return i * i; }};
+			REQUIRE(fr(3) == 9);
+		}
+		{
+			TMP::Function_ref fr{+[] { return 42; }};
+			REQUIRE(fr() == 42);
+		}
+	}
+	WHEN("Creating Function_ref from lambda") {
+		{
+			int i = 0;
+			auto lambda = [&i] { i = 42; };
+			TMP::Function_ref fr{lambda};
+			REQUIRE(i == 0);
+			fr();
+			REQUIRE(i == 42);
+		}
+	}
+}

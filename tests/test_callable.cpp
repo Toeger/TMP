@@ -73,4 +73,19 @@ SCENARIO("Testing Function_ref", "[Function_ref]") {
 		TMP::Function_ref f{foo};
 		REQUIRE(sizeof(f) <= sizeof(void (*)()) * 2);
 	}
+	WHEN("Making using a temporary capturing lambda") {
+		TMP::Function_ref f{[i = 42] { return i; }};
+		REQUIRE(f() == 42);
+	}
+	WHEN("Default-constructing and assigning functions") {
+		TMP::Function_ref<int()> f;
+		f = [] { return 42; };
+		REQUIRE(f() == 42);
+		f = [] { return 0; };
+		REQUIRE(f() == 0);
+	}
+	WHEN("Calling empty Function_ref") {
+		TMP::Function_ref<int()> f;
+		REQUIRE_THROWS_AS(f(), TMP::Bad_function_call);
+	}
 }

@@ -102,42 +102,45 @@ namespace TMP {
 		using Callables::operator()...;
 	};
 
+	//thrown when calling a nullptr reference
+	struct Bad_function_call {};
+
 	//like std::function, but not an owner
 	template <class Signature>
 	struct Function_ref {
 		Function_ref(Signature function_pointer)
-			: target{reinterpret_cast<void (*)()>(function_pointer)}
+			: target{.fp = reinterpret_cast<void (*)()>(function_pointer)}
 			, call{&fp_caller} {}
+		Function_ref() = default;
 		template <class Callable>
-		Function_ref(Callable &callable)
-			: call{&class_caller<typename Function_info::Return_type,
-								 std::conditional_t<std::is_const_v<Callable>, std::add_const_t<typename decltype(TMP::Callable_info(callable))::Class_type>,
-													typename decltype(TMP::Callable_info(callable))::Class_type>,
-								 decltype(&Callable::operator())>} {
-			target.object = &callable;
-		}
+		Function_ref(Callable &&callable)
+			: target{.object = &callable}
+			, call{&class_caller<typename Function_info::Return_type, std::add_pointer_t<std::remove_reference_t<Callable>>,
+								 decltype(&std::remove_reference_t<Callable>::operator())>} {}
 
 		template <class... Args>
 		auto operator()(Args &&... args) const {
+			if (call == nullptr) {
+				throw Bad_function_call{};
+			}
 			return call(target, {std::forward<Args>(args)...});
 		}
 
 		private:
-		using Function_info = decltype(TMP::Callable_info(std::declval<Signature>()));
 		union Target {
-			void (*fp)();
 			void *object;
+			void (*fp)();
 		} target;
-		typename Function_info::Return_type (*call)(Target target, typename Function_info::Args::template instantiate<std::tuple> args);
 
-		using FP = TMP::function_pointer<typename Function_info::Return_type, typename Function_info::Args::template prepend<void *>>;
+		using Function_info = decltype(TMP::Callable_info(std::declval<Signature>()));
+		typename Function_info::Return_type (*call)(Target target, typename Function_info::Args::template instantiate<std::tuple> args) = nullptr;
 
 		static auto fp_caller(Target target, typename Function_info::Args::template instantiate<std::tuple> args) {
-			return std::apply(reinterpret_cast<Signature>(target.fp), std::move(args));
+			return std::apply(reinterpret_cast<typename Function_info::as_function_pointer>(target.fp), std::move(args));
 		}
-		template <class Return_type, class Class, class FP>
+		template <class Return_type, class Class_pointer, class FP>
 		static Return_type class_caller(Target target, typename Function_info::Args::template instantiate<std::tuple> args) {
-			return std::apply([target](auto &&... largs) { (*reinterpret_cast<Class *>(target.object))(std::forward<decltype(largs)>(largs)...); },
+			return std::apply([target](auto &&... largs) { return (*reinterpret_cast<Class_pointer>(target.object))(std::forward<decltype(largs)>(largs)...); },
 							  std::move(args));
 		}
 	};

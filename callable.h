@@ -110,40 +110,35 @@ namespace TMP {
 			, call{&fp_caller} {}
 		template <class Callable>
 		Function_ref(Callable &callable)
-			: object{&callable}
-			, call{&class_caller<typename Function_info::Return_type,
+			: call{&class_caller<typename Function_info::Return_type,
 								 std::conditional_t<std::is_const_v<Callable>, std::add_const_t<typename decltype(TMP::Callable_info(callable))::Class_type>,
 													typename decltype(TMP::Callable_info(callable))::Class_type>,
 								 decltype(&Callable::operator())>} {
-			target.mfp = reinterpret_cast<void (Function_ref::*)()>(&Callable::operator());
+			target.object = &callable;
 		}
 
 		template <class... Args>
 		auto operator()(Args &&... args) const {
-			return call(target, object, {std::forward<Args>(args)...});
+			return call(target, {std::forward<Args>(args)...});
 		}
 
 		private:
 		using Function_info = decltype(TMP::Callable_info(std::declval<Signature>()));
 		union Target {
 			void (*fp)();
-			void (Function_ref::*mfp)();
+			void *object;
 		} target;
-		void *object = nullptr;
-		typename Function_info::Return_type (*call)(Target target, void *object, typename Function_info::Args::template instantiate<std::tuple> args);
+		typename Function_info::Return_type (*call)(Target target, typename Function_info::Args::template instantiate<std::tuple> args);
 
 		using FP = TMP::function_pointer<typename Function_info::Return_type, typename Function_info::Args::template prepend<void *>>;
 
-		static auto fp_caller(Target target, void *, typename Function_info::Args::template instantiate<std::tuple> args) {
+		static auto fp_caller(Target target, typename Function_info::Args::template instantiate<std::tuple> args) {
 			return std::apply(reinterpret_cast<Signature>(target.fp), std::move(args));
 		}
 		template <class Return_type, class Class, class FP>
-		static Return_type class_caller(Target target, void *obj, typename Function_info::Args::template instantiate<std::tuple> args) {
-			return std::apply(
-				[target, obj](auto &&... largs) {
-					(reinterpret_cast<Class *>(obj)->*reinterpret_cast<FP>(target.mfp))(std::forward<decltype(largs)>(largs)...);
-				},
-				std::move(args));
+		static Return_type class_caller(Target target, typename Function_info::Args::template instantiate<std::tuple> args) {
+			return std::apply([target](auto &&... largs) { (*reinterpret_cast<Class *>(target.object))(std::forward<decltype(largs)>(largs)...); },
+							  std::move(args));
 		}
 	};
 	template <class F>

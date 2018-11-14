@@ -1,6 +1,8 @@
 #include "../callable.h"
 #include "../external/catch.hpp"
 
+#include <memory>
+
 static char *foo(int, double) {
 	return nullptr;
 }
@@ -55,13 +57,20 @@ SCENARIO("Testing Function_ref", "[Function_ref]") {
 		}
 	}
 	WHEN("Creating Function_ref from lambda") {
-		{
-			int i = 0;
-			auto lambda = [&i] { i = 42; };
-			TMP::Function_ref fr{lambda};
-			REQUIRE(i == 0);
-			fr();
-			REQUIRE(i == 42);
-		}
+		int i = 0;
+		auto lambda = [&i] { i = 42; };
+		TMP::Function_ref fr{lambda};
+		REQUIRE(i == 0);
+		fr();
+		REQUIRE(i == 42);
+	}
+	WHEN("Passing move-only types") {
+		TMP::Function_ref fr{+[](std::unique_ptr<int> p) { return p; }};
+		auto up = fr(std::make_unique<int>(42));
+		REQUIRE(*up == 42);
+	}
+	WHEN("Making sure we don't use up overly much space") {
+		TMP::Function_ref f{foo};
+		REQUIRE(sizeof(f) <= sizeof(void (*)()) * 2);
 	}
 }

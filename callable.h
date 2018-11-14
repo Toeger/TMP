@@ -64,7 +64,8 @@ namespace TMP {
 
 	template <class T>
 	struct Callable_info<T, true> {
-		Callable_info(T) {}
+		Callable_info(T &&) {}
+		Callable_info(const T &) {}
 		Callable_info() = default;
 		using Return_type = detail::Return_type<T>;
 		using Class_type = detail::Class_type<T>;
@@ -75,7 +76,8 @@ namespace TMP {
 
 	template <class T>
 	struct Callable_info<T, false> {
-		Callable_info(T) {}
+		Callable_info(T &&) {}
+		Callable_info(const T &) {}
 		Callable_info() = default;
 		using Return_type = detail::Return_type<T>;
 		constexpr static bool has_class_type = false;
@@ -84,7 +86,7 @@ namespace TMP {
 	};
 
 	template <class T>
-	Callable_info(T)->Callable_info<T, detail::has_class_type<T>>;
+	Callable_info(T &&)->Callable_info<std::remove_reference_t<T>, detail::has_class_type<T>>;
 
 	//helper to make a function pointer
 	template <class Return_type, class Typelist>
@@ -128,7 +130,7 @@ namespace TMP {
 
 		private:
 		union Target {
-			void *object;
+			const void *object;
 			void (*fp)();
 		} target;
 
@@ -140,12 +142,15 @@ namespace TMP {
 		}
 		template <class Return_type, class Class_pointer, class FP>
 		static Return_type class_caller(Target target, typename Function_info::Args::template instantiate<std::tuple> args) {
-			return std::apply([target](auto &&... largs) { return (*reinterpret_cast<Class_pointer>(target.object))(std::forward<decltype(largs)>(largs)...); },
-							  std::move(args));
+			return std::apply(
+				[target](auto &&... largs) {
+					return (*reinterpret_cast<Class_pointer>(const_cast<void *>(target.object)))(std::forward<decltype(largs)>(largs)...);
+				},
+				std::move(args));
 		}
 	};
 	template <class F>
-	Function_ref(F)->Function_ref<typename decltype(Callable_info{std::declval<F>()})::as_function_pointer>;
+	Function_ref(F &&)->Function_ref<typename decltype(Callable_info{std::declval<F>()})::as_function_pointer>;
 } // namespace TMP
 
 //printing type names, from https://stackoverflow.com/a/20170989/3484570

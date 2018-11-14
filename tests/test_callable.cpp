@@ -29,6 +29,19 @@ SCENARIO("Getting callable info", "[callable]") {
 		REQUIRE(decltype(lambda)::has_class_type);
 		REQUIRE(type_name<decltype(lambda)::Class_type>().size() > 0);
 	}
+	WHEN("Getting info from non-copyable") {
+		{
+			auto lambda = [up = std::make_unique<int>(42)] { return *up; };
+			TMP::Callable_info{lambda};
+		}
+		{
+			const auto lambda = [up = std::make_unique<int>(42)] { return *up; };
+			TMP::Callable_info{lambda};
+		}
+		{
+			TMP::Callable_info{[up = std::make_unique<int>(42)] { return *up; }};
+		}
+	}
 
 	static_assert(std::is_same_v<TMP::Type_list<int, void *>::at<-1>, void *>);
 	static_assert(std::is_same_v<TMP::Type_list<int, void *>::at<1>, void *>);
@@ -87,5 +100,17 @@ SCENARIO("Testing Function_ref", "[Function_ref]") {
 	WHEN("Calling empty Function_ref") {
 		TMP::Function_ref<int()> f;
 		REQUIRE_THROWS_AS(f(), TMP::Bad_function_call);
+	}
+	WHEN("Referencing an uncopyable callable") {
+		{
+			auto lambda = [up = std::make_unique<int>(42)] { return *up; };
+			TMP::Function_ref f = lambda;
+			REQUIRE(f() == 42);
+		}
+		{
+			const auto lambda = [up = std::make_unique<int>(42)] { return *up; };
+			TMP::Function_ref f = lambda;
+			REQUIRE(f() == 42);
+		}
 	}
 }

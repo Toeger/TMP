@@ -1,5 +1,7 @@
 #pragma once
 
+#include <type_traits>
+
 namespace TMP {
 	//store and manipulate types
 	template <class... Ts>

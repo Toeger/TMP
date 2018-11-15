@@ -2,6 +2,8 @@
 #include "../external/catch.hpp"
 
 #include <memory>
+#include <mutex>
+#include <string>
 
 static char *foo(int, double) {
 	return nullptr;
@@ -49,6 +51,24 @@ SCENARIO("Getting callable info", "[callable]") {
 		std::is_same_v<TMP::Type_list<int, double>::template concatenate<TMP::Type_list<int *, double *>>, TMP::Type_list<int, double, int *, double *>>);
 	static_assert(std::is_same_v<typename TMP::Type_list<int, int *, double>::remove<int *>, TMP::Type_list<int, double>>);
 }
+
+struct Ref_counted {
+	Ref_counted() {
+		ref_count++;
+	}
+	Ref_counted(const Ref_counted &) {
+		ref_count++;
+	}
+	Ref_counted(Ref_counted &&) {
+		ref_count--;
+	}
+	Ref_counted &operator=(const Ref_counted &) = default;
+	Ref_counted &operator=(Ref_counted &&) noexcept = default;
+	~Ref_counted() {
+		ref_count--;
+	}
+	static inline int ref_count = 0;
+};
 
 SCENARIO("Testing Function_ref", "[Function_ref]") {
 	WHEN("Checking Overload") {
@@ -99,7 +119,7 @@ SCENARIO("Testing Function_ref", "[Function_ref]") {
 	}
 	WHEN("Calling empty Function_ref") {
 		TMP::Function_ref<int()> f;
-		REQUIRE_THROWS_AS(f(), TMP::Bad_function_call);
+		REQUIRE_THROWS_AS(f(), std::bad_function_call);
 	}
 	WHEN("Referencing an uncopyable callable") {
 		{
@@ -112,5 +132,67 @@ SCENARIO("Testing Function_ref", "[Function_ref]") {
 			TMP::Function_ref f = lambda;
 			REQUIRE(f() == 42);
 		}
+	}
+	WHEN("Testing lvalue arguments") {
+		TMP::Function_ref<int(int)> fr = [](int i) { return i; };
+		int i = 42;
+		REQUIRE(fr(i) == i);
+	}
+	WHEN("Testing const propagation of callable") {
+		struct C {
+			bool *called_with_const;
+			void operator()() {
+				*called_with_const = false;
+			}
+			void operator()() const {
+				*called_with_const = true;
+			}
+		};
+		bool propagated_as_const{};
+		C c{&propagated_as_const};
+		TMP::Function_ref<void()> f{c};
+		f();
+		REQUIRE(not propagated_as_const);
+		const auto &cc = c;
+		f = cc;
+		f();
+		REQUIRE(propagated_as_const);
+	}
+	WHEN("Checking if we can drop output") {
+		TMP::Function_ref<void()> f;
+		Ref_counted::ref_count = 0;
+		WHEN("Using a lambda") {
+			f = [] { return std::make_unique<Ref_counted>(); };
+			f();
+			REQUIRE(Ref_counted::ref_count == 0);
+		}
+		WHEN("Using a function pointer") {
+			f = +[] { return std::make_unique<Ref_counted>(); };
+			f();
+			REQUIRE(Ref_counted::ref_count == 0);
+		}
+	}
+	WHEN("Using convertible types") {
+		WHEN("Returning convertible type") {
+			TMP::Function_ref<std::string()> f = [] { return "42"; };
+			REQUIRE(f() == "42");
+		}
+		WHEN("Passing convertible type") {
+			TMP::Function_ref<std::string(const char *)> f = [](std::string s) { return s; };
+			REQUIRE(f("42") == "42");
+		}
+	}
+	WHEN("Using pointer to member function") {
+		struct S {
+			int f(int i) {
+				return i;
+			}
+		} s;
+		TMP::Function_ref<int(S &, int)> f = &S::f;
+		REQUIRE(f(s, 42) == 42);
+	}
+	WHEN("Testing RVO") {
+		TMP::Function_ref f = [] { return std::mutex{}; };
+		[[maybe_unused]] auto mutex = f();
 	}
 }

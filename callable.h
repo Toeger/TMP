@@ -1,9 +1,9 @@
+#include <exception>
+#include <functional>
 #include <iostream>
 #include <string_view>
-#include <tuple>
 #include <type_traits>
 #include <typeinfo>
-#include <variant>
 
 #include "type_list.h"
 
@@ -72,6 +72,7 @@ namespace TMP {
 		constexpr static bool has_class_type = true;
 		using Args = detail::Args<T>;
 		using as_function_pointer = decltype(detail::get_member_function_pointer<Return_type, Class_type>(Args{}));
+		using as_non_member_function_pointer = decltype(detail::get_function_pointer<Return_type>(Args{}));
 	};
 
 	template <class T>
@@ -83,6 +84,7 @@ namespace TMP {
 		constexpr static bool has_class_type = false;
 		using Args = detail::Args<T>;
 		using as_function_pointer = decltype(detail::get_function_pointer<Return_type>(Args{}));
+		using as_non_member_function_pointer = decltype(detail::get_function_pointer<Return_type>(Args{}));
 	};
 
 	template <class T>
@@ -104,53 +106,38 @@ namespace TMP {
 		using Callables::operator()...;
 	};
 
-	//thrown when calling a nullptr reference
-	struct Bad_function_call {};
-
 	//like std::function, but not an owner
-	template <class Signature>
-	struct Function_ref {
-		Function_ref(Signature function_pointer)
-			: target{.fp = reinterpret_cast<void (*)()>(function_pointer)}
-			, call{&fp_caller} {}
+	//implementation adapted from http://griwes.info/talks/hofs-cppcon2017.pdf page 103
+	template <typename Function>
+	class Function_ref;
+	template <typename R, typename... Args>
+	class Function_ref<R(Args...)> {
+		using invoke_t = R (*)(const void *, Args &&...);
+		invoke_t invoke = nullptr;
+		const void *data = nullptr;
+
+		public:
+		template <typename F>
+		Function_ref(F &&f) {
+			invoke = +[](const void *d, Args &&... args) -> R {
+				if constexpr (std::is_same_v<R, void>) {
+					std::invoke(*reinterpret_cast<std::remove_reference_t<F> *>(const_cast<void *>(d)), std::forward<Args>(args)...);
+				} else {
+					return std::invoke(*reinterpret_cast<std::remove_reference_t<F> *>(const_cast<void *>(d)), std::forward<Args>(args)...);
+				}
+			};
+			data = reinterpret_cast<const void *>(std::addressof(f));
+		}
 		Function_ref() = default;
-		template <class Callable>
-		Function_ref(Callable &&callable)
-			: target{.object = &callable}
-			, call{&class_caller<typename Function_info::Return_type, std::add_pointer_t<std::remove_reference_t<Callable>>,
-								 decltype(&std::remove_reference_t<Callable>::operator())>} {}
-
-		template <class... Args>
-		auto operator()(Args &&... args) const {
-			if (call == nullptr) {
-				throw Bad_function_call{};
+		R operator()(Args... args) const {
+			if (data == nullptr) {
+				throw std::bad_function_call{};
 			}
-			return call(target, {std::forward<Args>(args)...});
-		}
-
-		private:
-		union Target {
-			const void *object;
-			void (*fp)();
-		} target;
-
-		using Function_info = decltype(TMP::Callable_info(std::declval<Signature>()));
-		typename Function_info::Return_type (*call)(Target target, typename Function_info::Args::template instantiate<std::tuple> args) = nullptr;
-
-		static auto fp_caller(Target target, typename Function_info::Args::template instantiate<std::tuple> args) {
-			return std::apply(reinterpret_cast<typename Function_info::as_function_pointer>(target.fp), std::move(args));
-		}
-		template <class Return_type, class Class_pointer, class FP>
-		static Return_type class_caller(Target target, typename Function_info::Args::template instantiate<std::tuple> args) {
-			return std::apply(
-				[target](auto &&... largs) {
-					return (*reinterpret_cast<Class_pointer>(const_cast<void *>(target.object)))(std::forward<decltype(largs)>(largs)...);
-				},
-				std::move(args));
+			return invoke(data, std::forward<Args>(args)...);
 		}
 	};
 	template <class F>
-	Function_ref(F &&)->Function_ref<typename decltype(Callable_info{std::declval<F>()})::as_function_pointer>;
+	Function_ref(F &&)->Function_ref<std::remove_pointer_t<typename decltype(Callable_info{std::declval<F>()})::as_non_member_function_pointer>>;
 } // namespace TMP
 
 //printing type names, from https://stackoverflow.com/a/20170989/3484570

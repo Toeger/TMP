@@ -47,19 +47,20 @@ set(TMP_TEST_SRC
 	tests/tests.cpp
 	tests/test_callable.cpp
 	tests/test_type_list.cpp
+	tests/test_traits.cpp
 )
 
 # Other files one would want to edit that are not directly part of the TMP build but we want to appear in projects
 set(MISC_FILES
-	#.clang-format
-	#.gitignore
+	.clang-format
+	.gitignore
 	#.travis.yml
 	CMakeLists.txt
 	#README.md
 )
 add_custom_target(MISC_FILES
 	COMMENT "This target only exists to list files in IDEs"
-	SOURCES ${MISC_FILES} ${UI_FILES}
+	SOURCES ${MISC_FILES}
 )
 
 #add test executable

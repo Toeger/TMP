@@ -1,20 +1,23 @@
 #pragma once
 
+#include "type_list.h"
+
 #include <type_traits>
 
 namespace TMP {
-	namespace detail {
-		template <class T, template <class...> class Template>
-		struct Is_type_specialization : std::false_type {};
-		template <template <class...> class Template, class... Args>
-		struct Is_type_specialization<Template<Args...>, Template> : std::true_type {};
-
-	} // namespace detail
+	template <class T, template <class...> class Template>
+	struct is_type_specialization : std::false_type {};
+	template <template <class...> class Template, class... Args>
+	struct is_type_specialization<Template<Args...>, Template> : std::true_type {};
+	template <class T, template <class...> class Template>
+	constexpr bool is_type_specialization_v = is_type_specialization<T, Template>::value;
 
 	template <class T, template <class...> class Template>
-	auto is_type_specialization() -> typename detail::Is_type_specialization<T, Template>::type;
-	template <class T, class U>
-	std::false_type is_type_specialization();
-
-#define TMP_IS_TYPE_SPECIALIZATION_V(TYPE, ...) decltype(TMP::is_type_specialization<TYPE, __VA_ARGS__>())::value
+	struct get_type_specialization;
+	template <template <class...> class Template, class... Args>
+	struct get_type_specialization<Template<Args...>, Template> {
+		using Types = Type_list<Args...>;
+	};
+	template <class T, template <class...> class Template>
+	using get_type_specialization_t = typename get_type_specialization<T, Template>::Types;
 } // namespace TMP

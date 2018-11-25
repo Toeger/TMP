@@ -32,6 +32,17 @@ namespace TMP {
 			using types =
 				std::conditional_t<std::is_same_v<T, Head>, typename Remove<T, Tail...>::types, typename Remove<T, Tail...>::types::template prepend<Head>>;
 		};
+		//helper for contains
+		template <class T, class... Args>
+		struct Contains;
+		template <class T, class First, class... Args>
+		struct Contains<T, First, Args...> {
+			static constexpr bool value = std::is_same_v<T, First> || Contains<T, Args...>::value;
+		};
+		template <class T, class... Args>
+		struct Contains {
+			static constexpr bool value = false;
+		};
 
 		public:
 		//this should be private but clang-7 is buggy
@@ -53,6 +64,9 @@ namespace TMP {
 		using concatenate = decltype(concat(T{}));
 		template <class T>
 		using remove = typename Remove<T, Ts...>::types;
+		template <class T>
+		constexpr static bool contains_v = Contains<T, Ts...>::value;
+		constexpr static std::size_t size = sizeof...(Ts);
 
 		//TODO: sort, remove_if
 	};

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <type_traits>
+#include <utility>
 
 namespace TMP {
 	//store and manipulate types
@@ -67,7 +68,14 @@ namespace TMP {
 		template <class T>
 		constexpr static bool contains_v = Contains<T, Ts...>::value;
 		constexpr static std::size_t size = sizeof...(Ts);
+		using index_sequence = std::index_sequence_for<Ts...>;
 
 		//TODO: sort, remove_if
 	};
+	namespace detail {
+		template <template <typename...> class T, class... Args>
+		auto adopt_from(T<Args...> &&) -> Type_list<Args...>;
+	}
+	template <class T>
+	using adopt_from = decltype(detail::adopt_from(std::declval<T>()));
 } // namespace TMP

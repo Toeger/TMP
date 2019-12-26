@@ -20,4 +20,10 @@ namespace TMP {
 	};
 	template <class T, template <class...> class Template>
 	using get_type_specialization_t = typename get_type_specialization<T, Template>::Types;
+
+	template <class T>
+	auto is_dereferenceable(T &&t) -> decltype(*t, std::true_type{});
+	std::false_type is_dereferenceable(...);
+	template <class T>
+	constexpr bool is_dereferenceable_v = decltype(is_dereferenceable(std::declval<T>()))::value;
 } // namespace TMP
